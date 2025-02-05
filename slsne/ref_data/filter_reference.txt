@@ -102,6 +102,8 @@
       g           NTT          --    Vega   Generic    Generic
       g           NTT      EFOSC2      AB   Generic    3631.00
       g           P48          --      AB   Generic    3631.00
+      g           P48      CFH12k      AB   Generic    3631.00
+      r           P48      CFH12k      AB   Generic    3631.00
       g           P48         ZTF      AB   4746.48    3631.00
       g           P60          --      AB   Generic    3631.00
       g           P60        SEDM      AB   Generic    3631.00
@@ -213,6 +215,7 @@
       i          Gaia Astrometric      AB   Generic    3631.00
       i          IO:O          --      AB   Generic    3631.00
       I          OGLE          --    Vega   7931.81    2419.92
+      I          OGLE        OGLE    Vega   7931.81    2419.92
       i          P200        WASP      AB   Generic    3631.00
       i          Post          --      AB   Generic    3631.00
       i          SDSS          --      AB   7457.89    3631.00

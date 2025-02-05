@@ -85,7 +85,16 @@ band_map = {'u': 'SLOAN_SDSS.u_AB',
             'swift_UVW2': 'Swift_UVOT.UVW2_AB',
             'swift_V': 'Swift_UVOT.V_AB',
             'W1': 'WISE_WISE.W1_AB',
-            'W2': 'WISE_WISE.W2_AB'}
+            'W2': 'WISE_WISE.W2_AB',
+            'F062': 'Roman_WFI.F062',
+            'F087': 'Roman_WFI.F087',
+            'F106': 'Roman_WFI.F106',
+            'F129': 'Roman_WFI.F129',
+            'F146': 'Roman_WFI.F146',
+            'F158': 'Roman_WFI.F158',
+            'F184': 'Roman_WFI.F184',
+            'F213': 'Roman_WFI.F213'
+            }
 
 
 def nickelcobalt(times, fnickel, mejecta, rest_t_explosion):

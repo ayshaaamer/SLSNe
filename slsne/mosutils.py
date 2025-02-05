@@ -585,6 +585,13 @@ def plot_mosfit_lc(data, object_name, explosion_time, redshift, output_dir, plot
                       (phot['System'] == match_system[k])
             phot['Model'][k_match] = j
 
+    # Check if any photometry didn't get matched
+    missing = table.unique(phot[np.isnan(phot['Model']) & (phot['Ignore'] == 'False') ]['Filter','Telescope','Instrument','System'])
+    if len(missing) > 0:
+        print(f'Warning, some photometry not matched for {object_name}:')
+        print(missing)
+        print('\n')
+
     # Get central wavelengths and zeropoints
     cenwaves, zeropoints = quick_cenwave_zeropoint(phot)
     phot['cenwave'] = cenwaves
@@ -872,22 +879,25 @@ def get_mosfit_bolometric(extras, data, object_name, redshift, output_dir,
         # Scale dM/dt to Eddington
         norm_out = dmt_out / Mdot_edd[:, np.newaxis]
         if len(host_bh_masses) > 0:
-            # Scale using host galaxy mass
-            host_bh_mass = host_bh_masses[object_name]
-            Ledd_host = host_bh_mass * 4 * np.pi * c.G.cgs.value * c.M_sun.cgs.value * c.c.cgs.value / kappa
-            host_Mdot_edd = Ledd_host / (efficiency * c.c.cgs.value * c.c.cgs.value)
-            host_norm_out = dmt_out / host_Mdot_edd[:, np.newaxis]
-            do_host_norm = True
+            if object_name in host_bh_masses.keys():
+                # Scale using host galaxy mass
+                host_bh_mass = host_bh_masses[object_name]
+                Ledd_host = host_bh_mass * 4 * np.pi * c.G.cgs.value * c.M_sun.cgs.value * c.c.cgs.value / kappa
+                host_Mdot_edd = Ledd_host / (efficiency * c.c.cgs.value * c.c.cgs.value)
+                host_norm_out = dmt_out / host_Mdot_edd[:, np.newaxis]
+                do_host_norm = True
+            else:
+                do_host_norm = False
         else:
             do_host_norm = False
+    else:
+        do_host_norm = False
 
     # Clean pre-explosion data
     pre = (rad_out == 0) | np.isinf(tem_out)
     rad_out[pre] = 0
     tem_out[pre] = 0
     lum_out[pre] = 0
-    dmt_out[pre] = 0
-    norm_out[pre] = 0
     if do_host_norm:
         host_norm_out[pre] = 0
 
@@ -895,10 +905,14 @@ def get_mosfit_bolometric(extras, data, object_name, redshift, output_dir,
     rad_low, rad_med, rad_high = np.nanpercentile(rad_out, [15.87, 50, 84.13], axis=0)
     tem_low, tem_med, tem_high = np.nanpercentile(tem_out, [15.87, 50, 84.13], axis=0)
     lum_low, lum_med, lum_high = np.nanpercentile(lum_out, [15.87, 50, 84.13], axis=0)
-    dmt_low, dmt_med, dmt_high = np.nanpercentile(dmt_out, [15.87, 50, 84.13], axis=0)
-    norm_low, norm_med, norm_high = np.nanpercentile(norm_out, [15.87, 50, 84.13], axis=0)
     if do_host_norm:
         host_norm_low, host_norm_med, host_norm_high = np.nanpercentile(host_norm_out, [15.87, 50, 84.13], axis=0)
+
+    if is_tde:
+        dmt_out[pre] = 0
+        norm_out[pre] = 0
+        dmt_low, dmt_med, dmt_high = np.nanpercentile(dmt_out, [15.87, 50, 84.13], axis=0)
+        norm_low, norm_med, norm_high = np.nanpercentile(norm_out, [15.87, 50, 84.13], axis=0)
 
     # Save output
     if is_tde:

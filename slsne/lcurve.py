@@ -612,7 +612,7 @@ def get_all_phot(use_names=None, include_bronze=True):
 
 def get_evolution(names=None, min_phase=-85, max_phase=250, phase_samples=100):
     """
-    Get the bolumetric evolution curves for the radius, temperature,
+    Get the bolometric evolution curves for the radius, temperature,
     and luminosity of the supernovae.
 
     Parameters

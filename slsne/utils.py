@@ -394,7 +394,15 @@ def plot_colors(band):
         'J': 'mediumvioletred',
         'K': 'palevioletred', "Ks": 'palevioletred',
         'Y': 'indigo', "y": 'indigo',
-        'v': 'aquamarine'
+        'v': 'aquamarine',
+        'F062': '#003366',
+        'F087': '#0077BB',
+        'F106': '#99DDFF',
+        'F129': '#44BB99',
+        'F158': '#EEDD88',
+        'F184': '#EE8866',
+        'F213': '#B704C2',
+        'F146': '#994455'
     }
 
     # Get the color for the given band, default to 'k' if not found
