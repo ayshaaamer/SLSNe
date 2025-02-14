@@ -394,7 +394,15 @@ def plot_colors(band):
         'J': 'mediumvioletred',
         'K': 'palevioletred', "Ks": 'palevioletred',
         'Y': 'indigo', "y": 'indigo',
-        'v': 'aquamarine'
+        'v': 'aquamarine',
+        'F062': '#003366',
+        'F087': '#0077BB',
+        'F106': '#99DDFF',
+        'F129': '#44BB99',
+        'F158': '#EEDD88',
+        'F184': '#EE8866',
+        'F213': '#B704C2',
+        'F146': '#994455'
     }
 
     # Get the color for the given band, default to 'k' if not found
@@ -532,7 +540,8 @@ def calc_flux_lum(phot, redshift, return_lambda=False):
         return F_lambda, L_lambda
 
 
-def create_json(object_name, output_dir, default_err=0.1):
+def create_json(object_name, output_dir, default_err=0.1, phot=None,
+                reference='DR1'):
     """
     Create the JSON file that MOSFiT needs to fit the photometry
     from a photometry file of a known SLSN in the reference database.
@@ -546,6 +555,12 @@ def create_json(object_name, output_dir, default_err=0.1):
     default_err : float, default 0.1
         Default error to use for the photometry when it
         is missing or equal to 0.
+    phot : astropy.table.Table, default None
+        Table with the photometry data. If None, the
+        photometry will be read from the reference database.
+    reference : str, default 'DR1'
+        Reference to use for the photometry, default of
+        'DR1' will use 'Gomez et al. 2024'.
 
     Returns
     -------
@@ -553,7 +568,8 @@ def create_json(object_name, output_dir, default_err=0.1):
     """
 
     # Get photometry table
-    phot = get_lc(object_name)
+    if phot is None:
+        phot = get_lc(object_name)
 
     # Rename columns into MOSFiT format
     use = phot['Ignore'] == 'False'
@@ -582,13 +598,17 @@ def create_json(object_name, output_dir, default_err=0.1):
     # Convert to Pandas
     photometry = output.to_pandas().to_dict(orient='records')
 
+    # Format citation
+    if reference == 'DR1':
+        reference = 'Gomez et al. 2024'
+
     # Create data dictionary for MOSFiT data
     template = {
         object_name: {
             "name": object_name,
             "sources": [
                 {
-                    "name": "Gomez et al. 2024",
+                    "name": reference,
                     "alias": "1"
                 }
             ],

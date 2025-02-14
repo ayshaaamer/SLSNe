@@ -1,4 +1,4 @@
-__version__ = "0.1.0"
+__version__ = "0.2.1"
 __uri__ = "https://slsne.readthedocs.io"
 __author__ = "Sebastian Gomez"
 __email__ = "sgomez@stsci.edu"
