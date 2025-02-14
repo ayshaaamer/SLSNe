@@ -198,6 +198,7 @@
       I           P60     P60-Cam    Vega   Generic    Generic
       i           PS1          --      AB   7503.03    3631.00
       i           PS1        GPC1      AB   7503.03    3631.00
+      i           PS1        GPC2      AB   7503.03    3631.00
       i           PS2        GPC2      AB   7503.03    3631.00
       i           PTF          --      AB   Generic    3631.00
       i           P48         PTF      AB   Generic    3631.00
@@ -490,6 +491,7 @@
       w            --          --      AB   Generic    3631.00
       w           PS1          --      AB   5980.70    3631.00
       w           PS1        GPC1      AB   5980.70    3631.00
+      w           PS1        GPC2      AB   5980.70    3631.00
       w           PS2        GPC2      AB   5980.70    3631.00
      W1          WISE        WISE      AB  33526.00    3631.00
      W1          WISE        WISE    Vega  33526.00    309.540

@@ -613,7 +613,7 @@ def observations(seds, sample_wavelengths, ebv, nh_host, band_wavelengths, trans
 
 
 def slsnni(times, Pspin, Bfield, Mns, thetaPB, texplosion, kappa, log_kappa_gamma, mejecta, fnickel, v_ejecta,
-           temperature, cut_wave, alpha, redshift, log_nh_host, ebv, bands=None, cenwaves=None):
+           temperature, cut_wave, alpha, redshift, log_nh_host, ebv, bands=None, cenwaves=None, bolometric=False):
     """
     This function calculates the observed magnitudes at a set of filters given the physical
     input parameters of the MOSFiT slsnnni model.
@@ -658,6 +658,8 @@ def slsnni(times, Pspin, Bfield, Mns, thetaPB, texplosion, kappa, log_kappa_gamm
         The names of the filters in which to calculate the observed magnitudes.
     cenwaves : numpy.ndarray, optional
         The central wavelengths of the filters in Angstroms.
+    bolometric : bool, default False
+        Return only the bolometric luminosities?
 
     Returns
     -------
@@ -682,6 +684,10 @@ def slsnni(times, Pspin, Bfield, Mns, thetaPB, texplosion, kappa, log_kappa_gamm
 
     # Output luminosities
     luminosities = diffusion(times, input_luminosities, kappa, kappa_gamma, mejecta, v_ejecta, rest_t_explosion)
+
+    # If bolometric, only return the bolometric luminosities
+    if bolometric:
+        return luminosities
 
     # Photospheric radius and temperature
     rphot, Tphot = photosphere(times, luminosities, v_ejecta, temperature, rest_t_explosion)
