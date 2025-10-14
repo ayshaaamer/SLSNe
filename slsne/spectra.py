@@ -11,8 +11,6 @@ from astropy import table
 import numpy as np
 import glob
 import os
-from google.oauth2 import service_account
-import gspread
 import json
 from scipy.signal import savgol_filter
 from scipy.optimize import curve_fit
@@ -61,7 +59,7 @@ def get_plot_data():
 
     # Reading in SN names and parameter file
     all_sne = glob.glob(f'supernovae_final/*')
-    sne_params = pd.read_csv('../sne_data.txt', delim_whitespace=True)
+    sne_params = pd.read_csv('ref_data/sne_data.txt', delim_whitespace=True)
 
     # Initialising empty arrays
     phases = []
@@ -187,20 +185,39 @@ def make_spec_phase_distribution_plots(output_dir='.', binwidth=10):
     plt.savefig(plot_dir, bbox_inches='tight')
 
 
+def redshit_plots(output_dir='.', binwidth=0.1, max_bin=2):
+    """
+    This function a histogram of the redshift distribution of the SLSNe spectra. It overlays the distribution of all events with those that over 3 or more spectra.
 
-def redshit_plots():
+    Parameters
+    ----------
+    output_dir : str, optional
+        Directory in which to save the output plot (default is the current directory).
+    binwidth : float, optional
+        Width of the histogram bins in redshift (default is 0.1).
+    max_bin : float, optional
+        Upper limit of the redshift range for the histogram (default is 2).
+
+    Returns
+    -------
+    None
+        The function saves a PDF plot named
+        `redshift_distribution_{binwidth}.pdf` in the specified output directory.
+    """
+
+
     # Looping through all supernovae
     all_sne = glob.glob(f'supernovae_final/*')
+    sne_params = pd.read_csv('ref_data/sne_data.txt', delim_whitespace=True)
+
+    # Colours of bins
+    cm = plt.get_cmap('Set3')
+    colors = [cm(9), cm(5)]
     
     # Initialising arrays for redshift
     redshifts = []
     redshifts_all = []
     len_spec = []
-    objects = []
-    cm = plt.get_cmap('Set3')
-
-    # Getting redshift information of spectra
-    phases, phases_exp, redshifts, objects = get_plot_data()
 
     # Each SN in new folder so looping through them all
     for sn in all_sne:
@@ -208,22 +225,17 @@ def redshit_plots():
         print('Processing', sn)
         # Extracting object name and redshift from filename
         obj = sn.split('/')[-1]
-                z = float(sn_params['Redshift'].values)                 # Redshift 
-        z = get_redshift(obj)
+        sn_params = sne_params[sne_params['Name'] == obj]
+        z = float(sn_params['Redshift'].values) 
+        # Appending redshfit and number of spectra to lists
         redshifts_all.append(z)
         len_spec.append(len(spectra))
 
+        # If over 2 spectra, also appending to a separate list
         if len(spectra) >= 3:
             redshifts.append(z)
-            objects.append(obj)
 
-
-    # bin width and edges
-    binwidth = 0.1
-    max_bin = 2
-    colors = [cm(9), cm(5)]
-    
-
+    # Plotting histogram
     plt.clf()
     plt.hist([redshifts_all, redshifts], bins=np.arange(0, max_bin+binwidth, binwidth), alpha=0.5, 
              label=['All objects', 'Objects with $\geq$3 spectra'], color=colors)
@@ -232,128 +244,183 @@ def redshit_plots():
     plt.legend()
     plt.xlim(-0.05, 2.05)
     
-    
-    # plt.savefig('Figures/redshift_distribution_combined.pdf', bbox_inches='tight')
+    plot_name = 'redshift_distribution_{binwidth}.pdf'
+    plot_dir = os.path.join(output_dir, plot_name)
+    plt.savefig(plot_dir, bbox_inches='tight')
 
 
+def load_and_plot_spectra(sn_name, flux_type='processed', output_dir='.', plot=True):
+    """
+    This function loads and plots spectra for a given SLSNe. The flux type can be specified to 
+    return either 'raw' or 'processed flux.
 
-def no_spec_plots(master_spreadsheet):
+    Parameters
+    ----------
+    sn_name : str
+        Name of the supernova.
+    flux_type : {'raw', 'processed'}, optional
+        Which flux column to use when loading spectra (default is 'processed').
+    output_dir : str, optional
+        Directory in which to save the output plot (default is current directory).
+    plot : bool, optional
+        Whether to display and save the overlaid spectra plot (default is True).
 
-    cm = plt.get_cmap('Set3')
+    Returns
+    -------
+    spectra_list : list of dict
+        A list of dictionaries, each containing:
+            {
+                'filename': str
+                'mjd': float,
+                'wavelength': numpy.ndarray,
+                'flux': numpy.ndarray,
+                'error': numpy.ndarray or None,
+            }
 
-    all_sne = glob.glob(f'supernovae_final/*')
-    no_spectra = []
-    objects = []
-    redshifts = []
-    redshifts_all = []
-    peak_mags = []
-    peak_mags_all = []
-    counter1 = 0
+    """
 
-    # Each SN in new folder so looping through them all
-    for sn in all_sne:
-        # spectra = glob.glob(sn + "/*.txt")
-        spectra = glob.glob(sn + '/*')
-        # print('Processing', sn)
-        # print(len(spectra))
+    # Locate all spectra files
+    spectra_files = sorted(glob.glob(os.path.join(sn_name, 'spectra_raw_processed', '*.txt')))
+    if not spectra_files:
+        raise FileNotFoundError(f'No spectra found in {sn_name}/spectra_raw_processed/')
 
-        obj = sn.split('/')[-1]
+    spectra_list = []
 
-        no_spectra.append(len(spectra))
-        objects.append(obj)
-        z = get_redshift(obj)
-        redshifts_all.append(z)
-        peak_mag = str((master_spreadsheet[master_spreadsheet['Name'] == obj]['Peak Abs. Mag']).values[0])
-
-        # if peak mag available, adding to list
-        if peak_mag.split(' ')[0] != '':
-            peak_mags_all.append(float(peak_mag.split(' ')[0]))
+    for spec_file in spectra_files:
+        data = table.Table.read(spec_file, format='ascii')
+        header = table.Table.read(data.meta['comments'], delimiter='=', format='ascii.no_header',
+                                    names=['key', 'val'])
+        MJD = float(data.meta['comments'][np.where(header['key'] == 'MJD')[0][0]].split('=')[1].strip())
         
-        # if only 1 spectra available
-        if len(spectra) == 1:
-            counter1 +=1
-            redshifts.append(z)
+        # Expecting columns: wavelength, raw flux, (optional error), processed flux
+        if data.shape[1] < 3:
+            raise ValueError(f'Unexpected column format in {spec_file}')
 
-            if peak_mag.split(' ')[0] != '':
-                peak_mags.append(float(peak_mag.split(' ')[0]))
+        wavelength = np.array(data['Wavelength'].value).astype(float)
+        raw_flux = np.array(data['Raw_Flux'].value).astype(float)
+        processed_flux = np.array(data['Processed_Flux'].value).astype(float)
+        error = np.array(data['Error'].value).astype(float)
 
-        # if over 50 spectra for the object
-        if len(spectra) >= 20:
-            print('this object has lots of spectra')
-            print(obj)
-            print('This object has ', len(spectra), ' spectra')
-            print('redshift is: ', get_redshift(obj))
-            print('peak observed mag is: ', peak_mag)
-            # redshifts_high.append(get_redshift(obj))
-            print()
+        flux = raw_flux if flux_type.lower() == 'raw' else processed_flux
 
-        # # if redshift over 1.75
-        # if z >= 1.75:
-        #     print('this object has a high redshift')
-        #     print(obj)
-        #     print('This object has ', len(spectra), ' spectra')
-        #     print('redshift is: ', get_redshift(obj))
-        #     print('peak observed mag is: ', peak_mag)
-        #     print()
+        spectra_list.append({
+            'mjd': MJD,
+            'wavelength': wavelength,
+            'flux': flux,
+            'error': error,
+            'filename': os.path.basename(spec_file)
+        })
 
+    # Sort by MJD
+    spectra_list.sort(key=lambda x: x['mjd'])
 
-    print(len(no_spectra))
-    print('number of objects with 1 spectra: ', counter1)
-    # print('redshifts: ', redshifts)
-    # print('peak mag: ', peak_mags)
-    # print('min redshift: ', min(redshifts_all))
+    # Calculate a global median flux for scaling the offsets
+    all_flux_values = np.concatenate([s['flux'] for s in spectra_list])
+    global_median_flux = np.median(all_flux_values)
+    if global_median_flux == 0:
+        global_median_flux = 1.0  # avoid division by zero
 
+    # Plot if requested
+    if plot:
+        plt.clf()
+        fig, ax = plt.subplots(figsize=(7, 5))
 
+        # Create a colour gradient based on MJD
+        mjds = [s['mjd'] for s in spectra_list]
+        cmap = plt.get_cmap('plasma')
+        norm = plt.Normalize(min(mjds), max(mjds))
 
-    # bin width and edges
-    binwidth = 1
-    max_bin = max(no_spectra)
-    
-    plt.figure(1, figsize=(6,4))
-    plt.clf()
-    plt.hist(no_spectra, bins=np.arange(1, max_bin+binwidth, binwidth), color=cm(0))
-    plt.yscale('log')
-    plt.xlabel('Number of Spectra')
-    plt.ylabel('Number of Objects') 
-    # plt.xlim(-200, 750)
-    plt.savefig('Figures/number_spectra_objects_log.pdf', bbox_inches='tight')
-    # plt.show()
+        for i, s in enumerate(spectra_list):
+            ax.plot(s['wavelength'], s['flux']+i*global_median_flux,
+                    color=cmap(norm(s['mjd'])),
+                    lw=1,
+                    label=f"MJD {s['mjd']:.1f}")
 
-    # plt.figure(2, figsize=(6,3))
-    # plt.clf()
-    # plt.hist(redshifts)
-    # plt.xlabel('Redshift')
-    # plt.ylabel('Number of Objects')
-    # # plt.xlim(-200, 750)
-    # plt.savefig('Figures/redshift_1spec.pdf', bbox_inches='tight')
-    # plt.show()
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        cbar = plt.colorbar(sm, ax=ax)
+        cbar.set_label('MJD')
 
-    # plt.figure(3, figsize=(6,3))
-    # plt.clf()
-    # plt.hist(peak_mags)
-    # plt.xlabel('Peak Apparent Magnitude')
-    # plt.ylabel('Number of Objects')
-    # # plt.xlim(-200, 750)
-    # plt.savefig('Figures/peak_mag_1spec.pdf', bbox_inches='tight')
-    # plt.show()
+        ax.set_xlabel('Wavelength (Å)')
+        ax.set_ylabel('Flux (arbitrary units)')
+        ax.set_title(f'{sn_name} spectra ({flux_type} flux)')
+        plt.tight_layout()
 
-    # plt.figure(4, figsize=(6,3))
-    # plt.clf()
-    # plt.hist(peak_mags_all)
-    # plt.xlabel('Peak Apparent Magnitude')
-    # plt.ylabel('Number of Objects')
-    # # plt.xlim(-200, 750)
-    # plt.savefig('Figures/peak_mag.pdf', bbox_inches='tight')
-    # plt.show()
+        # Save plot
+        plot_name = f'{sn_name}_spectra_{flux_type}.pdf'
+        plot_path = os.path.join(output_dir, plot_name)
+        plt.savefig(plot_path, bbox_inches='tight')
+        print(f'Saved spectra plot to {plot_path}')
 
-    # plt.figure(5, figsize=(6,3))
-    # plt.clf()
-    # plt.hist(peak_mags_all)
-    # plt.xlabel('Peak Absolute Magnitude')
-    # plt.ylabel('Number of Objects')
-    # # plt.xlim(-200, 750)
-    # plt.savefig('Figures/peak_abs_mag.pdf', bbox_inches='tight')
-    # plt.show()
+    return spectra_list
 
 
 
+
+
+
+
+
+
+
+    for spec_file in spectra_files:
+
+        # Load numeric data
+        data = np.loadtxt(spec_file)
+
+        # Expected at least two columns: wavelength and flux
+        if data.shape[1] < 2:
+            raise ValueError(f'Unexpected column format in {spec_file}')
+
+        wavelength = data[:, 0]
+        # Choose which flux to use based on user input
+        if flux_type.lower() == 'raw':
+            flux = data[:, 1]
+        elif flux_type.lower() == 'processed' and data.shape[1] > 2:
+            flux = data[:, -1]  # Last column if multiple fluxes exist
+        else:
+            flux = data[:, 1]  # Fallback to the only flux column
+
+        spectra_list.append({
+            'filename': os.path.basename(spec_file),
+            'mjd': mjd,
+            'date_obs': date_obs,
+            'wavelength': wavelength,
+            'flux': flux
+        })
+
+    # Sort by MJD for chronological order
+    spectra_list.sort(key=lambda x: x['mjd'])
+
+    # Plot all spectra in MJD order
+    if plot:
+        plt.clf()
+        fig, ax = plt.subplots(figsize=(7, 5))
+
+        mjds = [s['mjd'] for s in spectra_list]
+        cmap = plt.get_cmap('plasma')
+        norm = plt.Normalize(min(mjds), max(mjds))
+
+        for s in spectra_list:
+            ax.plot(s['wavelength'], s['flux'],
+                    color=cmap(norm(s['mjd'])),
+                    lw=1,
+                    label=f"MJD {s['mjd']:.1f}")
+
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        cbar = plt.colorbar(sm, ax=ax)
+        cbar.set_label('MJD')
+
+        ax.set_xlabel('Wavelength (Å)')
+        ax.set_ylabel('Flux (erg cm⁻² s⁻¹ Å⁻¹)')
+        ax.set_title(f'{sn_name} spectra ({flux_type} flux)')
+        plt.tight_layout()
+
+        # Save the plot
+        plot_name = f'{sn_name}_spectra_{flux_type}.pdf'
+        plot_path = os.path.join(output_dir, plot_name)
+        plt.savefig(plot_path, bbox_inches='tight')
+        print(f'Saved plot to {plot_path}')
+
+    return spectra_list
