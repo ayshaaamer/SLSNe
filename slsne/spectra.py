@@ -57,26 +57,23 @@ def get_plot_data():
         Names of the SLSNe corresponding to each spectrum. 
     """
 
-    # Reading in SN names and parameter file
-    all_sne = glob.glob(f'ref_data/supernovae/*')
-    sne_params = pd.read_csv('ref_data/sne_data.txt', delim_whitespace=True)
-
     # Initialising empty arrays
     phases = []
     phases_exp = []
     objects = []
 
     # Looping through each folder containing the spectra
-    for sn in all_sne:
+    for sn in directories:
         spectra = glob.glob(sn + '/raw_spectra/*')
 
         # Getting the SN name from the filename and reading file containing parameters
         obj = sn.split('/')[-1]
-        sn_params = sne_params[sne_params['Name'] == obj]
+        sn_params = data_table[data_table['Name'] == obj]
+
         try:
-            exp_date = float(sn_params['Explosion'].iloc[0])      # Time of explosion (MJD)
-            max_date = float(sn_params['Peak'].iloc[0])           # Time of maximum light (MJD)
-            z = float(sn_params['Redshift'].iloc[0]) 
+            exp_date = float(sn_params['Explosion'][0])      # Time of explosion (MJD)
+            max_date = float(sn_params['Peak'][0])           # Time of maximum light (MJD)
+            z = float(sn_params['Redshift'][0]) 
 
             # Looping through each spectrum within the file
             for filename in spectra:
@@ -136,7 +133,6 @@ def plot_spec_phases(output_dir='.', binwidth=10):
     weights = []
     df = pd.DataFrame({'Phase':phases, 'Object':objects})
     for min_phase in range(min_bin, max_bin+binwidth, binwidth):
-        # print(min_phase)
         df_subset = df[(df['Phase'] >= min_phase) & (df['Phase'] < min_phase+binwidth)]
         weights.append(len(df_subset['Object'].unique()))
 
@@ -148,7 +144,6 @@ def plot_spec_phases(output_dir='.', binwidth=10):
     
 
     # Normalise colour scale for each histogram based on number of unique objects
-    print(range(min_bin, max_bin+binwidth, binwidth))
     hist, bins = np.histogram(phases, bins=range(min_bin, max_bin+binwidth, binwidth))
     norm = Normalize(vmin=min(weights), vmax=max(weights))
     colors = custom_cm(norm(weights))
@@ -169,7 +164,7 @@ def plot_spec_phases(output_dir='.', binwidth=10):
     cbar.set_label('Number of Objects')
     ax.set_xlabel('Phase relative to maximum light (days)')
     ax.set_ylabel('Number of Spectra')
-    plot_name = 'phase_histogram_peak_{binwidth}.pdf'
+    plot_name = f'phase_histogram_peak_{binwidth}.pdf'
     plot_dir = os.path.join(output_dir, plot_name)
     plt.savefig(plot_dir, bbox_inches='tight')
 
@@ -209,11 +204,6 @@ def plot_redshits(output_dir='.', binwidth=0.1, max_bin=2):
         `redshift_distribution_{binwidth}.pdf` in the specified output directory.
     """
 
-
-    # Looping through all supernovae
-    all_sne = glob.glob(f'ref_data/supernovae/*')
-    sne_params = pd.read_csv('ref_data/sne_data.txt', delim_whitespace=True)
-
     # Colours of bins
     cm = plt.get_cmap('Set3')
     colors = [cm(9), cm(5)]
@@ -224,14 +214,14 @@ def plot_redshits(output_dir='.', binwidth=0.1, max_bin=2):
     len_spec = []
 
     # Each SN in new folder so looping through them all
-    for sn in all_sne:
+    for sn in directories:
         spectra = glob.glob(sn + '/raw_spectra/*')
         print('Processing', sn)
         # Extracting object name and redshift from filename
         obj = sn.split('/')[-1]
-        sn_params = sne_params[sne_params['Name'] == obj]
+        sn_params = data_table[data_table['Name'] == obj]
         try:
-            z = float(sn_params['Redshift'].iloc[0]) 
+            z = float(sn_params['Redshift'][0]) 
             # Appending redshfit and number of spectra to lists
             redshifts_all.append(z)
             len_spec.append(len(spectra))
@@ -288,11 +278,11 @@ def load_and_plot_spectra(sn_name, flux_type='processed', output_dir='.', plot=T
 
     # Locate all spectra files
     if flux_type=='raw':
-        spectra_files = sorted(glob.glob(os.path.join('ref_data/supernovae', sn_name, 'raw_spectra', '*.txt')))
+        spectra_files = sorted(glob.glob(os.path.join(data_dir, 'supernovae', sn_name, 'raw_spectra', '*.txt')))
         if not spectra_files:
             raise FileNotFoundError(f'No spectra found in {sn_name}/raw_spectra/')
     elif flux_type=='processed':
-        spectra_files = sorted(glob.glob(os.path.join('ref_data/supernovae', sn_name, 'processed_spectra', '*.txt')))
+        spectra_files = sorted(glob.glob(os.path.join(data_dir, 'supernovae', sn_name, 'processed_spectra', '*.txt')))
         if not spectra_files:
             raise FileNotFoundError(f'No spectra found in {sn_name}/processed_spectra/')
 
@@ -329,14 +319,12 @@ def load_and_plot_spectra(sn_name, flux_type='processed', output_dir='.', plot=T
     if global_median_flux == 0:
         global_median_flux = 1.0  # avoid division by zero
 
-    print(spectra_list)
 
     # Plot if requested
     if plot:
         plt.figure(figsize=(7, 5))
 
         for i, s in enumerate(spectra_list):
-            print(f"Spectrum {i}: min={s['flux'].min()}, max={s['flux'].max()}")
             mask = np.isfinite(s['wavelength']) & np.isfinite(s['flux'])
             plt.plot(s['wavelength'][mask], s['flux'][mask] + i*global_median_flux,
                     label=f"MJD {s['mjd']:.1f}")
@@ -425,48 +413,79 @@ def plot_average_spectra(phase_type='peak', output_dir='.'):
     plt.savefig(plot_path, bbox_inches='tight') 
 
 
-def plot_velocities(phase_type='peak', output_dir='.'):
+def load_average_spectra(phase_type='peak'):
+    """
+    This function loads the average spectra in a range on phase bins for different binning schemes.
+
+    Parameters
+    ----------
+    phase_type : {'peak', 'explosion'}, optional
+        Group spectra by unscaled phases from peak ('peak') or
+        scaled phases from explosion ('explosion').
+        Default is 'peak'
+
+    Returns
+    -------
+    averages : list of dict
+        A list of dictionaries, each containing:
+            {
+                'bin_edges': list,
+                'wavelength': ndarray,
+                'median': ndarray,
+                'percentile16': ndarray,
+                'percentile84': ndarray
+            }
+    """
+
+    # wavelength array the spectra have been mapped onto
+    wl = np.arange(3000, 9000, 10)
+    # initialising empty list
+    averages = []
+
+    if phase_type == 'peak':
+        bins = [-80, -20, 0, 20, 40, 60, 80, 100, 160]
+        folder = 'peak_phases_unscaled'
+    elif phase_type == 'explosion':
+        bins = [0, 20, 40, 60, 80, 100, 120, 150, 500]
+        folder = 'explosion_phases_scaled'
+    else:
+        raise ValueError("phase_type must be 'peak' or 'explosion'")
+    
+    for i in range(len(bins) - 1):
+        bin_min = bins[i]
+        bin_max = bins[i + 1]
+
+        filename = os.path.join(data_dir, f"average_spectra/{folder}", f"{bin_min}-{bin_max}.txt")
+
+        av_spec = pd.read_csv(filename, delim_whitespace=True)
+
+        averages.append({
+            'bin_edges': [bin_min, bin_max],
+            'wavelength': wl,
+            'median': av_spec['Median'],
+            'percentile16': av_spec['Percentile16'],
+            'percentile84': av_spec['Percentile84']
+        })
+
+    return averages
+
+
+def get_velocities():
     """
     This function plots velocities derived from fitting the Fe II 5169 feature and saves them as a PDF.
 
     Parameters
     ----------
-    phase_type : {'peak', 'explosion'}, optional
-        To group the spectra by unscaled phases from peak, or scaled phases from exxplosion 
-        (default is 'peak').
-    output_dir : str, optional
-        Directory in which to save the output plot (default is current directory).
+    None
     
     Returns
     -------
-    None
-        The function saves a PDF plot:
-          - `<phase_type>_velocities.pdf.pdf`
+    velocities : DataFrame
+        A DataFrame of the velocity information
     """
-
-    velocities = pd.read_csv('ref_data/velocity_fits_aamer2025.txt', delimiter=',')
-
-    if phase_type=='peak':
-        phase_column = 'Phase_peak'
-    elif phase_type=='explosion':
-        phase_column = 'Phase_exp'
     
-    # Looping through the velocities for each event
-    for obj in velocities.Object.unique():
-        sn_vel = velocities[velocities['Object']==obj]
+    filepath = os.path.join(data_dir, 'velocity_fits_aamer2025.txt')
+    velocities = pd.read_csv(filepath, delimiter=',')
 
-        plt.errorbar(sn_vel[phase_column], sn_vel['Best_v'], yerr=(sn_vel['Lower_e'],sn_vel['Upper_e']), alpha=0.1)
-        plt.errorbar(sn_vel[phase_column], sn_vel['Best_v'], alpha=0.5)
-        plt.errorbar(sn_vel[phase_column], sn_vel['Best_v'], fmt='o', color='k', alpha=0.5)
-            
-    # Saving individual plots 
-    plt.ylim(0,-30000)
-    plt.xlabel('Phase from peak (days)')
-    plt.ylabel('Velocity (km s$^{-1}$)')
-    
-    # Save plot
-    plot_name = f'{phase_type}_velocities.pdf'
-    plot_path = os.path.join(output_dir, plot_name)
-    plt.savefig(plot_path, bbox_inches='tight') 
-
+    return velocities
 
