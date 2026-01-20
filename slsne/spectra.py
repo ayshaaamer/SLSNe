@@ -429,6 +429,51 @@ def plot_average_spectra(phase_type='peak', output_dir='.'):
     plt.savefig(plot_path, bbox_inches='tight') 
 
 
+def plot_velocities(phase_type='peak', output_dir='.'):
+    """
+    This function plots velocities derived from fitting the Fe II 5169 feature and saves them as a PDF.
+
+    Parameters
+    ----------
+    phase_type : {'peak', 'explosion'}, optional
+        To group the spectra by unscaled phases from peak, or scaled phases from exxplosion 
+        (default is 'peak').
+    output_dir : str, optional
+        Directory in which to save the output plot (default is current directory).
+    
+    Returns
+    -------
+    None
+        The function saves a PDF plot:
+          - `<phase_type>_velocities.pdf.pdf`
+    """
+
+    velocities = pd.read_csv('ref_data/velocity_fits_aamer2025.txt', delimiter=',')
+
+    if phase_type=='peak':
+        phase_column = 'Phase_peak'
+    elif phase_type=='explosion':
+        phase_column = 'Phase_exp'
+    
+    # Looping through the velocities for each event
+    for obj in velocities.Object.unique():
+        sn_vel = velocities[velocities['Object']==obj]
+
+        plt.errorbar(sn_vel[phase_column], sn_vel['Best_v'], yerr=(sn_vel['Lower_e'],sn_vel['Upper_e']), alpha=0.1)
+        plt.errorbar(sn_vel[phase_column], sn_vel['Best_v'], alpha=0.5)
+        plt.errorbar(sn_vel[phase_column], sn_vel['Best_v'], fmt='o', color='k', alpha=0.5)
+            
+        # Saving individual plots 
+        plt.gca().invert_yaxis()
+        plt.xlabel('Phase from peak (days)')
+        plt.ylabel('Velocity 10$^{3}$ km s$^{-1}$')
+    
+        
+        # Save plot
+        plot_name = f'{phase_type}_velocities.pdf'
+        plot_path = os.path.join(output_dir, plot_name)
+        plt.savefig(plot_path, bbox_inches='tight') 
+
 
 
 
