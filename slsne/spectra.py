@@ -58,7 +58,7 @@ def get_plot_data():
     """
 
     # Reading in SN names and parameter file
-    all_sne = glob.glob(f'supernovae_final/*')
+    all_sne = glob.glob(f'ref_data/supernovae/*')
     sne_params = pd.read_csv('ref_data/sne_data.txt', delim_whitespace=True)
 
     # Initialising empty arrays
@@ -68,7 +68,7 @@ def get_plot_data():
 
     # Looping through each folder containing the spectra
     for sn in all_sne:
-        spectra = glob.glob(sn + '/*')
+        spectra = glob.glob(sn + '/raw_spectra/*')
 
         # Getting the SN name from the filename and reading file containing parameters
         obj = sn.split('/')[-1]
@@ -207,7 +207,7 @@ def redshit_plots(output_dir='.', binwidth=0.1, max_bin=2):
 
 
     # Looping through all supernovae
-    all_sne = glob.glob(f'supernovae_final/*')
+    all_sne = glob.glob(f'ref_data/supernovae/*')
     sne_params = pd.read_csv('ref_data/sne_data.txt', delim_whitespace=True)
 
     # Colours of bins
@@ -221,7 +221,7 @@ def redshit_plots(output_dir='.', binwidth=0.1, max_bin=2):
 
     # Each SN in new folder so looping through them all
     for sn in all_sne:
-        spectra = glob.glob(sn + '/*')
+        spectra = glob.glob(sn + '/raw_spectra/*')
         print('Processing', sn)
         # Extracting object name and redshift from filename
         obj = sn.split('/')[-1]
@@ -252,7 +252,7 @@ def redshit_plots(output_dir='.', binwidth=0.1, max_bin=2):
 def load_and_plot_spectra(sn_name, flux_type='processed', output_dir='.', plot=True):
     """
     This function loads and plots spectra for a given SLSNe. The flux type can be specified to 
-    return either 'raw' or 'processed flux.
+    return either 'raw' or 'processed flux'.
 
     Parameters
     ----------
@@ -280,9 +280,14 @@ def load_and_plot_spectra(sn_name, flux_type='processed', output_dir='.', plot=T
     """
 
     # Locate all spectra files
-    spectra_files = sorted(glob.glob(os.path.join(sn_name, 'spectra_raw_processed', '*.txt')))
-    if not spectra_files:
-        raise FileNotFoundError(f'No spectra found in {sn_name}/spectra_raw_processed/')
+    if flux_type=='raw':
+        spectra_files = sorted(glob.glob(os.path.join(sn_name, 'raw_spectra', '*.txt')))
+        if not spectra_files:
+            raise FileNotFoundError(f'No spectra found in {sn_name}/raw_spectra/')
+    elif flux_type=='processed':
+        spectra_files = sorted(glob.glob(os.path.join(sn_name, 'processed_spectra', '*.txt')))
+        if not spectra_files:
+            raise FileNotFoundError(f'No spectra found in {sn_name}/processed_spectra/')
 
     spectra_list = []
 
@@ -352,6 +357,76 @@ def load_and_plot_spectra(sn_name, flux_type='processed', output_dir='.', plot=T
         plt.savefig(plot_path, bbox_inches='tight')
 
     return spectra_list
+
+
+def plot_average_spectra(phase_type='peak', output_dir='.'):
+    """
+    This function plots the average spectra in a range on phase bins and saves as a PDF.
+
+    Parameters
+    ----------
+    phase_type : {'peak', 'explosion'}, optional
+        To group the spectra by unscaled phases from peak, or scaled phases from exxplosion 
+        (default is 'peak').
+    output_dir : str, optional
+        Directory in which to save the output plot (default is current directory).
+    
+    Returns
+    -------
+    None
+        The function saves a PDF plot:
+          - `<phase_type>_average_spectra.pdf.pdf`
+    """
+
+    cmap = plt.cm.get_cmap('Set2')
+    wl = np.arange(3000,9000,10)
+
+    if phase_type=='peak':
+        bins = [-80,-20,0,20,40,60,80,100,160]
+        folder = 'peak_phases_unscaled'
+    elif phase_type=='explosion':
+        bins = [0,20,40,60,80,100,120,150,500]
+        folder = 'explosion_phases_scaled'
+
+    # Prepare the figure and grid layout
+    plt.figure(figsize=(10, 15))
+    plt.clf()
+    fig = plt.figure(figsize=(15, 15))
+    gs = GridSpec(4, 2, figure=fig)
+
+    fig_combos = [[0, 0], [1, 0], [2, 0], [3, 0], [0, 1], [1, 1], [2, 1], [3, 1]]
+
+    # Loop through each bin range
+    for i in range(len(bins) - 1):
+        # Initialising bin parameters and plot
+        bin_min = bins[i]
+        bin_max = bins[i+1]
+        fig_no = fig_combos[i]
+        ax = fig.add_subplot(gs[fig_no[0], fig_no[1]])
+        filename = f'ref_data/average_spectra/'+{folder}+'/'+str(bin_min)+'-'+str(bin_max)+'.txt'
+        av_spec = pd.read_csv(filename, delim_whitespace=True)
+
+            
+        # Plot the average flux for the current bin
+        ax.plot(wl, av_spec['# Median'], label=f'{bin_min} to {bin_max} days', color=cmap(0))
+        ax.fill_between(wl, av_spec['Percentile16'], av_spec['Percentile84'], alpha=0.3, color=cmap(0))
+        
+        # Set plot labels and legend
+        ax.legend()
+        ax.set_yticks([])
+        ax.tick_params(axis='x', direction='in')
+        fig.subplots_adjust(wspace=0.05, hspace=0)
+        if (fig_no[0]==3):
+            ax.set_xlabel('Rest-frame Wavelength (A)')
+        
+    # Show the overall plot
+    fig.text(0.11, 0.5, 'Scaled Flux', va='center', rotation='vertical')     
+    fig.text(0.51, 0.5, 'Scaled Flux', va='center', rotation='vertical')  
+
+    # Save plot
+    plot_name = f'{phase_type}_average_spectra.pdf'
+    plot_path = os.path.join(output_dir, plot_name)
+    plt.savefig(plot_path, bbox_inches='tight') 
 
 
 
