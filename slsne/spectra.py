@@ -350,7 +350,6 @@ def load_and_plot_spectra(sn_name, flux_type='processed', output_dir='.', plot=T
         plot_name = f'{sn_name}_spectra_{flux_type}.pdf'
         plot_path = os.path.join(output_dir, plot_name)
         plt.savefig(plot_path, bbox_inches='tight')
-        print(f'Saved spectra plot to {plot_path}')
 
     return spectra_list
 
@@ -358,69 +357,3 @@ def load_and_plot_spectra(sn_name, flux_type='processed', output_dir='.', plot=T
 
 
 
-
-
-
-
-
-    for spec_file in spectra_files:
-
-        # Load numeric data
-        data = np.loadtxt(spec_file)
-
-        # Expected at least two columns: wavelength and flux
-        if data.shape[1] < 2:
-            raise ValueError(f'Unexpected column format in {spec_file}')
-
-        wavelength = data[:, 0]
-        # Choose which flux to use based on user input
-        if flux_type.lower() == 'raw':
-            flux = data[:, 1]
-        elif flux_type.lower() == 'processed' and data.shape[1] > 2:
-            flux = data[:, -1]  # Last column if multiple fluxes exist
-        else:
-            flux = data[:, 1]  # Fallback to the only flux column
-
-        spectra_list.append({
-            'filename': os.path.basename(spec_file),
-            'mjd': mjd,
-            'date_obs': date_obs,
-            'wavelength': wavelength,
-            'flux': flux
-        })
-
-    # Sort by MJD for chronological order
-    spectra_list.sort(key=lambda x: x['mjd'])
-
-    # Plot all spectra in MJD order
-    if plot:
-        plt.clf()
-        fig, ax = plt.subplots(figsize=(7, 5))
-
-        mjds = [s['mjd'] for s in spectra_list]
-        cmap = plt.get_cmap('plasma')
-        norm = plt.Normalize(min(mjds), max(mjds))
-
-        for s in spectra_list:
-            ax.plot(s['wavelength'], s['flux'],
-                    color=cmap(norm(s['mjd'])),
-                    lw=1,
-                    label=f"MJD {s['mjd']:.1f}")
-
-        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-        sm.set_array([])
-        cbar = plt.colorbar(sm, ax=ax)
-        cbar.set_label('MJD')
-
-        ax.set_xlabel('Wavelength (Å)')
-        ax.set_ylabel('Flux (erg cm⁻² s⁻¹ Å⁻¹)')
-        ax.set_title(f'{sn_name} spectra ({flux_type} flux)')
-        plt.tight_layout()
-
-        # Save the plot
-        plot_name = f'{sn_name}_spectra_{flux_type}.pdf'
-        plot_path = os.path.join(output_dir, plot_name)
-        plt.savefig(plot_path, bbox_inches='tight')
-        print(f'Saved plot to {plot_path}')
-
-    return spectra_list
