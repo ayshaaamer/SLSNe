@@ -73,31 +73,35 @@ def get_plot_data():
         # Getting the SN name from the filename and reading file containing parameters
         obj = sn.split('/')[-1]
         sn_params = sne_params[sne_params['Name'] == obj]
-        exp_date = float(sn_params['Explosion'].values[0])      # Time of explosion (MJD)
-        max_date = float(sn_params['Peak'].values[0])           # Time of maximum light (MJD)
+        try:
+            exp_date = float(sn_params['Explosion'].iloc[0])      # Time of explosion (MJD)
+            max_date = float(sn_params['Peak'].iloc[0])           # Time of maximum light (MJD)
+            z = float(sn_params['Redshift'].iloc[0]) 
 
-        # Looping through each spectrum within the file
-        for filename in spectra:
-            data = table.Table.read(filename, format='ascii')
-            header = table.Table.read(data.meta['comments'], delimiter='=', format='ascii.no_header',
-                                        names=['key', 'val'])
-            MJD = float(data.meta['comments'][np.where(header['key'] == 'MJD')[0][0]].split('=')[1].strip())
+            # Looping through each spectrum within the file
+            for filename in spectra:
+                data = table.Table.read(filename, format='ascii')
+                header = table.Table.read(data.meta['comments'], delimiter='=', format='ascii.no_header',
+                                            names=['key', 'val'])
+                MJD = float(data.meta['comments'][np.where(header['key'] == 'MJD')[0][0]].split('=')[1].strip())
 
-            # Calculating phase from explosion and peak, and converting to rest frame
-            phase = round((MJD-max_date)/(1+z), 3)
-            phase_exp = round((MJD-exp_date)/(1+z), 3)
+                # Calculating phase from explosion and peak, and converting to rest frame
+                phase = round((MJD-max_date)/(1+z), 3)
+                phase_exp = round((MJD-exp_date)/(1+z), 3)
 
-            # Only accounting for spectra with phases less than 200 days post peak
-            if phase < 200: 
-                phases.append(phase)
-                phases_exp.append(phase_exp)
-                objects.append(obj)
+                # Only accounting for spectra with phases less than 200 days post peak
+                if phase < 200: 
+                    phases.append(phase)
+                    phases_exp.append(phase_exp)
+                    objects.append(obj)
+        except:
+            print('This object is not within the sample:', sn)
 
 
     return phases, phases_exp, objects
 
 
-def make_spec_phase_distribution_plots(output_dir='.', binwidth=10):
+def plot_spec_phases(output_dir='.', binwidth=10):
     """Generate and save histograms showing the distribution of SLSN spectra versus phase. Each bin is colour 
     coded according to the number of unique objects in the bin.
 
@@ -119,14 +123,14 @@ def make_spec_phase_distribution_plots(output_dir='.', binwidth=10):
           - `phase_histogram_peak_<binwidth>.pdf`
           - `phase_histogram_exp_<binwidth>.pdf`"""
 
+    # Getting phase information of spectra
+    phases, phases_exp, objects = get_plot_data()
+
     # Setting bin width and edges of bins
     min_bin = math.floor(min(phases)/binwidth)*binwidth
     max_bin = math.ceil(max(phases)/binwidth)*binwidth
     min_bin_exp = math.floor(min(phases_exp)/binwidth)*binwidth
     max_bin_exp = math.ceil(max(phases_exp)/binwidth)*binwidth
-
-    # Getting phase information of spectra
-    phases, phases_exp, objects = get_plot_data()
 
     # Computing the number of unique SNe contributing to each phase bin (for colour weighting)
     weights = []
@@ -180,12 +184,12 @@ def make_spec_phase_distribution_plots(output_dir='.', binwidth=10):
     cbar.set_label('Number of Objects')
     ax.set_xlabel('Phase relative to explosion (days)')
     ax.set_ylabel('Number of Spectra')
-    plot_name = 'phase_histogram_exp_{binwidth}.pdf'
+    plot_name = f'phase_histogram_exp_{binwidth}.pdf'
     plot_dir = os.path.join(output_dir, plot_name)
     plt.savefig(plot_dir, bbox_inches='tight')
 
 
-def redshit_plots(output_dir='.', binwidth=0.1, max_bin=2):
+def plot_redshits(output_dir='.', binwidth=0.1, max_bin=2):
     """
     This function a histogram of the redshift distribution of the SLSNe spectra. It overlays the distribution of all events with those that over 3 or more spectra.
 
@@ -226,25 +230,28 @@ def redshit_plots(output_dir='.', binwidth=0.1, max_bin=2):
         # Extracting object name and redshift from filename
         obj = sn.split('/')[-1]
         sn_params = sne_params[sne_params['Name'] == obj]
-        z = float(sn_params['Redshift'].values) 
-        # Appending redshfit and number of spectra to lists
-        redshifts_all.append(z)
-        len_spec.append(len(spectra))
+        try:
+            z = float(sn_params['Redshift'].iloc[0]) 
+            # Appending redshfit and number of spectra to lists
+            redshifts_all.append(z)
+            len_spec.append(len(spectra))
 
-        # If over 2 spectra, also appending to a separate list
-        if len(spectra) >= 3:
-            redshifts.append(z)
+            # If over 2 spectra, also appending to a separate list
+            if len(spectra) >= 3:
+                redshifts.append(z)
+        except:
+            print('This object is not within the sample:', sn)
 
     # Plotting histogram
     plt.clf()
     plt.hist([redshifts_all, redshifts], bins=np.arange(0, max_bin+binwidth, binwidth), alpha=0.5, 
-             label=['All objects', 'Objects with $\geq$3 spectra'], color=colors)
+             label=['All objects', r'Objects with $\geq$3 spectra'], color=colors)
     plt.xlabel('Redshift')
     plt.ylabel('Number of Objects')
     plt.legend()
     plt.xlim(-0.05, 2.05)
     
-    plot_name = 'redshift_distribution_{binwidth}.pdf'
+    plot_name = f'redshift_distribution_{binwidth}.pdf'
     plot_dir = os.path.join(output_dir, plot_name)
     plt.savefig(plot_dir, bbox_inches='tight')
 
@@ -281,11 +288,11 @@ def load_and_plot_spectra(sn_name, flux_type='processed', output_dir='.', plot=T
 
     # Locate all spectra files
     if flux_type=='raw':
-        spectra_files = sorted(glob.glob(os.path.join(sn_name, 'raw_spectra', '*.txt')))
+        spectra_files = sorted(glob.glob(os.path.join('ref_data/supernovae', sn_name, 'raw_spectra', '*.txt')))
         if not spectra_files:
             raise FileNotFoundError(f'No spectra found in {sn_name}/raw_spectra/')
     elif flux_type=='processed':
-        spectra_files = sorted(glob.glob(os.path.join(sn_name, 'processed_spectra', '*.txt')))
+        spectra_files = sorted(glob.glob(os.path.join('ref_data/supernovae', sn_name, 'processed_spectra', '*.txt')))
         if not spectra_files:
             raise FileNotFoundError(f'No spectra found in {sn_name}/processed_spectra/')
 
@@ -296,17 +303,14 @@ def load_and_plot_spectra(sn_name, flux_type='processed', output_dir='.', plot=T
         header = table.Table.read(data.meta['comments'], delimiter='=', format='ascii.no_header',
                                     names=['key', 'val'])
         MJD = float(data.meta['comments'][np.where(header['key'] == 'MJD')[0][0]].split('=')[1].strip())
-        
-        # Expecting columns: wavelength, raw flux, (optional error), processed flux
-        if data.shape[1] < 3:
-            raise ValueError(f'Unexpected column format in {spec_file}')
 
         wavelength = np.array(data['Wavelength'].value).astype(float)
-        raw_flux = np.array(data['Raw_Flux'].value).astype(float)
-        processed_flux = np.array(data['Processed_Flux'].value).astype(float)
-        error = np.array(data['Error'].value).astype(float)
+        flux = np.array(data['Flux'].value).astype(float)
 
-        flux = raw_flux if flux_type.lower() == 'raw' else processed_flux
+        if 'Error' in data.colnames:
+            error = np.array(data['Error'].value).astype(float)
+        else:
+            error = None
 
         spectra_list.append({
             'mjd': MJD,
@@ -321,35 +325,27 @@ def load_and_plot_spectra(sn_name, flux_type='processed', output_dir='.', plot=T
 
     # Calculate a global median flux for scaling the offsets
     all_flux_values = np.concatenate([s['flux'] for s in spectra_list])
-    global_median_flux = np.median(all_flux_values)
+    global_median_flux = np.nanmedian(all_flux_values)
     if global_median_flux == 0:
         global_median_flux = 1.0  # avoid division by zero
 
+    print(spectra_list)
+
     # Plot if requested
     if plot:
-        plt.clf()
-        fig, ax = plt.subplots(figsize=(7, 5))
-
-        # Create a colour gradient based on MJD
-        mjds = [s['mjd'] for s in spectra_list]
-        cmap = plt.get_cmap('plasma')
-        norm = plt.Normalize(min(mjds), max(mjds))
+        plt.figure(figsize=(7, 5))
 
         for i, s in enumerate(spectra_list):
-            ax.plot(s['wavelength'], s['flux']+i*global_median_flux,
-                    color=cmap(norm(s['mjd'])),
-                    lw=1,
+            print(f"Spectrum {i}: min={s['flux'].min()}, max={s['flux'].max()}")
+            mask = np.isfinite(s['wavelength']) & np.isfinite(s['flux'])
+            plt.plot(s['wavelength'][mask], s['flux'][mask] + i*global_median_flux,
                     label=f"MJD {s['mjd']:.1f}")
 
-        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-        sm.set_array([])
-        cbar = plt.colorbar(sm, ax=ax)
-        cbar.set_label('MJD')
-
-        ax.set_xlabel('Wavelength (Å)')
-        ax.set_ylabel('Flux (arbitrary units)')
-        ax.set_title(f'{sn_name} spectra ({flux_type} flux)')
+        plt.xlabel('Wavelength (Å)')
+        plt.ylabel('Flux')
+        plt.title(f'{sn_name} spectra ({flux_type} flux)')
         plt.tight_layout()
+        plt.legend()
 
         # Save plot
         plot_name = f'{sn_name}_spectra_{flux_type}.pdf'
@@ -403,12 +399,12 @@ def plot_average_spectra(phase_type='peak', output_dir='.'):
         bin_max = bins[i+1]
         fig_no = fig_combos[i]
         ax = fig.add_subplot(gs[fig_no[0], fig_no[1]])
-        filename = f'ref_data/average_spectra/'+{folder}+'/'+str(bin_min)+'-'+str(bin_max)+'.txt'
+        filename = f'ref_data/average_spectra/{folder}/'+str(bin_min)+'-'+str(bin_max)+'.txt'
         av_spec = pd.read_csv(filename, delim_whitespace=True)
 
             
         # Plot the average flux for the current bin
-        ax.plot(wl, av_spec['# Median'], label=f'{bin_min} to {bin_max} days', color=cmap(0))
+        ax.plot(wl, av_spec['Median'], label=f'{bin_min} to {bin_max} days', color=cmap(0))
         ax.fill_between(wl, av_spec['Percentile16'], av_spec['Percentile84'], alpha=0.3, color=cmap(0))
         
         # Set plot labels and legend
@@ -463,17 +459,14 @@ def plot_velocities(phase_type='peak', output_dir='.'):
         plt.errorbar(sn_vel[phase_column], sn_vel['Best_v'], alpha=0.5)
         plt.errorbar(sn_vel[phase_column], sn_vel['Best_v'], fmt='o', color='k', alpha=0.5)
             
-        # Saving individual plots 
-        plt.gca().invert_yaxis()
-        plt.xlabel('Phase from peak (days)')
-        plt.ylabel('Velocity 10$^{3}$ km s$^{-1}$')
+    # Saving individual plots 
+    plt.ylim(0,-30000)
+    plt.xlabel('Phase from peak (days)')
+    plt.ylabel('Velocity (km s$^{-1}$)')
     
-        
-        # Save plot
-        plot_name = f'{phase_type}_velocities.pdf'
-        plot_path = os.path.join(output_dir, plot_name)
-        plt.savefig(plot_path, bbox_inches='tight') 
-
-
+    # Save plot
+    plot_name = f'{phase_type}_velocities.pdf'
+    plot_path = os.path.join(output_dir, plot_name)
+    plt.savefig(plot_path, bbox_inches='tight') 
 
 
